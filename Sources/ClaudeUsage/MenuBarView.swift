@@ -1,11 +1,13 @@
-import ClaudeUsageCore
 import SwiftUI
+import ClaudeUsageCore
 
 public struct MenuBarView: View {
     @ObservedObject var service: UsageService
     var onToggleDesktopWidget: () -> Void
     var isDesktopWidgetVisible: Bool
     var onQuit: () -> Void
+    
+    public static let availableTabs = ["All", "Claude", "Antigravity", "ChatGPT"]
     
     public init(
         service: UsageService = .shared,
@@ -20,70 +22,63 @@ public struct MenuBarView: View {
     }
     
     public var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 12) {
             // Header
             headerSection
             
-            Divider()
-                .opacity(0.4)
-            
-            // Error banner if any
-            if let err = service.errorMessage {
-                errorBanner(err)
-            }
-            
-            // 5-Hour Session Card
-            sessionCard
-            
-            // 7-Day Weekly Card
-            weeklyCard
-            
-            // Breakdown Card (if available)
-            if let rows = service.usage?.sevenDayBreakdown?.rows, !rows.isEmpty {
-                breakdownSection(rows: rows)
-            }
+            // Tab Selector
+            tabSelectorSection
             
             Divider()
-                .opacity(0.4)
+                .opacity(0.3)
             
-            // Desktop Widget & Controls
+            // Content based on tab
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 12) {
+                    if service.selectedTab == "All" || service.selectedTab == "Claude" {
+                        claudeCard
+                    }
+                    if service.selectedTab == "All" || service.selectedTab == "Antigravity" {
+                        antigravityCard
+                    }
+                    if service.selectedTab == "All" || service.selectedTab == "ChatGPT" {
+                        chatGPTCard
+                    }
+                }
+            }
+            .frame(maxHeight: 380)
+            
+            Divider()
+                .opacity(0.3)
+            
+            // Controls & Settings
             controlsSection
         }
-        .padding(16)
-        .frame(width: 320)
+        .padding(14)
+        .frame(width: 340)
         .background(VisualEffectView(material: .popover, blendingMode: .behindWindow))
     }
     
-    // MARK: - Sections
+    // MARK: - Header
     
     private var headerSection: some View {
         HStack(alignment: .center) {
-            // Icon
             ZStack {
                 Circle()
                     .fill(Color(nsColor: .controlAccentColor).opacity(0.15))
-                    .frame(width: 32, height: 32)
+                    .frame(width: 28, height: 28)
                 
                 Image(systemName: "sparkles")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(Color(nsColor: .controlAccentColor))
             }
             
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Claude Usage")
-                    .font(.system(size: 14, weight: .bold))
-                
-                if let email = service.accountInfo?.emailAddress {
-                    let tier = (service.accountInfo?.seatTier ?? "pro").capitalized
-                    Text("\(email) • \(tier)")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                } else {
-                    Text("Claude Pro / Team")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
+            VStack(alignment: .leading, spacing: 1) {
+                Text("AI Limit Tracker")
+                    .font(.system(size: 13, weight: .bold))
+                Text("Claude • Antigravity • ChatGPT")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
             }
             
             Spacer()
@@ -91,135 +86,278 @@ public struct MenuBarView: View {
             // Refresh Button
             Button(action: {
                 Task {
-                    await service.fetchUsage()
+                    await service.fetchAll()
                 }
             }) {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .rotationEffect(.degrees(service.isLoading ? 360 : 0))
                     .animation(service.isLoading ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: service.isLoading)
             }
             .buttonStyle(.plain)
             .disabled(service.isLoading)
-            .help("Refresh usage data")
+            .help("Refresh all limit data")
         }
     }
     
-    private func errorBanner(_ msg: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.orange)
-                .font(.system(size: 12))
-            Text(msg)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .lineLimit(2)
-            Spacer()
+    private var tabSelectorSection: some View {
+        HStack(spacing: 4) {
+            ForEach(MenuBarView.availableTabs, id: \.self) { tab in
+                Button(action: {
+                    service.selectedTab = tab
+                }) {
+                    Text(tab)
+                        .font(.system(size: 11, weight: service.selectedTab == tab ? .semibold : .regular))
+                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity)
+                        .background(service.selectedTab == tab ? Color(nsColor: .controlAccentColor).opacity(0.2) : Color.clear)
+                        .foregroundColor(service.selectedTab == tab ? Color(nsColor: .controlAccentColor) : .secondary)
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .padding(8)
-        .background(Color.orange.opacity(0.1))
-        .cornerRadius(6)
+        .padding(2)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.4))
+        .cornerRadius(8)
     }
     
-    private var sessionCard: some View {
+    // MARK: - Claude Card
+    
+    private var claudeCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("5-Hour Session Window")
-                    .font(.system(size: 12, weight: .semibold))
+                Circle().fill(Color.purple).frame(width: 7, height: 7)
+                Text("Claude")
+                    .font(.system(size: 12, weight: .bold))
+                
+                if let email = service.accountInfo?.emailAddress {
+                    Text("(\(email))")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
                 Spacer()
                 Text("\(Int(service.fiveHourPercent))%")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundColor(colorForPercent(service.fiveHourPercent))
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundColor(service.colorForPercent(service.fiveHourPercent))
             }
             
-            // Progress Bar
-            CustomProgressBar(percent: service.fiveHourPercent, color: colorForPercent(service.fiveHourPercent))
-                .frame(height: 7)
-            
-            HStack {
-                if !service.fiveHourCountdown.isEmpty {
-                    Label("Resets in \(service.fiveHourCountdown)", systemImage: "clock")
-                        .font(.system(size: 11))
+            // 5h Session Bar
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("5-Hour Session")
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.secondary)
+                    Spacer()
+                    if !service.fiveHourCountdown.isEmpty {
+                        Text("↻ \(service.fiveHourCountdown)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
                 }
-                Spacer()
-                if !service.fiveHourFormattedReset.isEmpty {
-                    Text(service.fiveHourFormattedReset)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.8))
-                }
-            }
-        }
-        .padding(10)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-        .cornerRadius(8)
-    }
-    
-    private var weeklyCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Weekly Limit (7-Day)")
-                    .font(.system(size: 12, weight: .semibold))
-                Spacer()
-                Text("\(Int(service.sevenDayPercent))%")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundColor(colorForPercent(service.sevenDayPercent))
+                CustomProgressBar(percent: service.fiveHourPercent, color: service.colorForPercent(service.fiveHourPercent))
+                    .frame(height: 5)
             }
             
-            // Progress Bar
-            CustomProgressBar(percent: service.sevenDayPercent, color: colorForPercent(service.sevenDayPercent))
-                .frame(height: 7)
-            
-            HStack {
-                if !service.sevenDayCountdown.isEmpty {
-                    Label("Resets in \(service.sevenDayCountdown)", systemImage: "calendar")
-                        .font(.system(size: 11))
+            // 7d Weekly Bar
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("7-Day Limit: \(Int(service.sevenDayPercent))%")
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.secondary)
+                    Spacer()
+                    if !service.sevenDayCountdown.isEmpty {
+                        Text("↻ \(service.sevenDayCountdown)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
                 }
-                Spacer()
-                if !service.sevenDayFormattedReset.isEmpty {
-                    Text(service.sevenDayFormattedReset)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.8))
-                }
+                CustomProgressBar(percent: service.sevenDayPercent, color: service.colorForPercent(service.sevenDayPercent))
+                    .frame(height: 5)
             }
-        }
-        .padding(10)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-        .cornerRadius(8)
-    }
-    
-    private func breakdownSection(rows: [BreakdownRow]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Weekly Usage Breakdown")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.secondary)
             
-            HStack(spacing: 8) {
-                ForEach(rows) { row in
-                    if row.percent > 0 {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(colorForBreakdownKey(row.key))
-                                .frame(width: 6, height: 6)
-                            Text("\(row.displayName): \(Int(row.percent))%")
-                                .font(.system(size: 11))
-                                .foregroundColor(.primary)
+            if service.selectedTab == "Claude", let rows = service.usage?.sevenDayBreakdown?.rows, !rows.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(rows) { r in
+                        if r.percent > 0 {
+                            Text("\(r.displayName): \(Int(r.percent))%")
+                                .font(.system(size: 9))
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
-                Spacer()
             }
         }
-        .padding(.horizontal, 4)
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .cornerRadius(10)
     }
+    
+    // MARK: - Antigravity Card
+    
+    private var antigravityCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Circle().fill(Color.blue).frame(width: 7, height: 7)
+                Text("Antigravity")
+                    .font(.system(size: 12, weight: .bold))
+                Text("(Gemini)")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("\(Int(service.agyGemini5hUsed))%")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundColor(service.colorForPercent(service.agyGemini5hUsed))
+            }
+            
+            // Gemini 5h Bar
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("Gemini 5-Hour Limit")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if !service.agyGemini5hCountdown.isEmpty {
+                        Text("↻ \(service.agyGemini5hCountdown)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                CustomProgressBar(percent: service.agyGemini5hUsed, color: service.colorForPercent(service.agyGemini5hUsed))
+                    .frame(height: 5)
+            }
+            
+            // Gemini Weekly Bar
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("Gemini Weekly: \(Int(service.agyGeminiWeeklyUsed))%")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if !service.agyGeminiWeeklyCountdown.isEmpty {
+                        Text("↻ \(service.agyGeminiWeeklyCountdown)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                CustomProgressBar(percent: service.agyGeminiWeeklyUsed, color: service.colorForPercent(service.agyGeminiWeeklyUsed))
+                    .frame(height: 5)
+            }
+            
+            // 3P models (Claude & GPT in Antigravity)
+            if service.agy3p5hUsed > 0 || service.selectedTab == "Antigravity" {
+                HStack {
+                    Text("3P Models (Claude/GPT): \(Int(service.agy3p5hUsed))% used")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if !service.agy3p5hCountdown.isEmpty {
+                        Text("↻ \(service.agy3p5hCountdown)")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .cornerRadius(10)
+    }
+    
+    // MARK: - ChatGPT Card
+    
+    private var chatGPTCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Circle().fill(Color.green).frame(width: 7, height: 7)
+                Text("ChatGPT / GPT")
+                    .font(.system(size: 12, weight: .bold))
+                
+                Text("(\(service.chatGPTPlan))")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(Color(nsColor: .controlAccentColor))
+                
+                Spacer()
+                Text("\(Int(service.chatGPT5hUsed))%")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundColor(service.colorForPercent(service.chatGPT5hUsed))
+            }
+            
+            // ChatGPT 5h Primary Window
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("5-Hour Primary Window")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if !service.chatGPT5hCountdown.isEmpty {
+                        Text("↻ \(service.chatGPT5hCountdown)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                CustomProgressBar(percent: service.chatGPT5hUsed, color: service.colorForPercent(service.chatGPT5hUsed))
+                    .frame(height: 5)
+            }
+            
+            // ChatGPT Weekly Secondary Window
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("Weekly Limit: \(Int(service.chatGPTWeeklyUsed))%")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if !service.chatGPTWeeklyCountdown.isEmpty {
+                        Text("↻ \(service.chatGPTWeeklyCountdown)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                CustomProgressBar(percent: service.chatGPTWeeklyUsed, color: service.colorForPercent(service.chatGPTWeeklyUsed))
+                    .frame(height: 5)
+            }
+            
+            if let count = service.chatGPTUsage?.resetCredits?.availableCount, count > 0 {
+                HStack {
+                    Image(systemName: "bolt.shield")
+                        .font(.system(size: 9))
+                        .foregroundColor(.green)
+                    Text("\(count) Reset Credit\(count > 1 ? "s" : "") Available")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .cornerRadius(10)
+    }
+    
+    // MARK: - Controls Section
     
     private var controlsSection: some View {
         VStack(spacing: 8) {
+            // Menu Bar Display Mode
+            HStack {
+                Text("Menu Bar Title:")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Picker("", selection: $service.menuBarMode) {
+                    ForEach(MenuBarDisplayMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 130)
+            }
+            
             // Desktop Widget toggle
             HStack {
                 Label("Desktop Widget", systemImage: "macwindow.on.rectangle")
-                    .font(.system(size: 12))
+                    .font(.system(size: 11))
                 Spacer()
                 Button(action: onToggleDesktopWidget) {
                     Text(isDesktopWidgetVisible ? "Hide" : "Show")
@@ -256,27 +394,6 @@ public struct MenuBarView: View {
         }
     }
     
-    // MARK: - Helpers
-    
-    private func colorForPercent(_ pct: Double) -> Color {
-        if pct >= 85 {
-            return .red
-        } else if pct >= 60 {
-            return .orange
-        } else {
-            return .green
-        }
-    }
-    
-    private func colorForBreakdownKey(_ key: String) -> Color {
-        switch key {
-        case "claude_code": return .purple
-        case "chat": return .blue
-        case "cowork": return .teal
-        default: return .gray
-        }
-    }
-    
     private func timeAgo(from date: Date) -> String {
         let seconds = Int(Date().timeIntervalSince(date))
         if seconds < 5 { return "just now" }
@@ -296,13 +413,13 @@ struct CustomProgressBar: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: 3)
                     .fill(Color(nsColor: .separatorColor).opacity(0.3))
                     .frame(height: geo.size.height)
                 
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: 3)
                     .fill(color)
-                    .frame(width: max(4, min(geo.size.width * CGFloat(percent / 100.0), geo.size.width)), height: geo.size.height)
+                    .frame(width: max(3, min(geo.size.width * CGFloat(percent / 100.0), geo.size.width)), height: geo.size.height)
                     .animation(.easeInOut(duration: 0.3), value: percent)
             }
         }

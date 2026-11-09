@@ -1,7 +1,7 @@
-import ClaudeUsageCore
 import AppKit
 import SwiftUI
 import Combine
+import ClaudeUsageCore
 
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
@@ -9,14 +9,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
     
     public func applicationDidFinishLaunching(_ notification: Notification) {
-        // Prevent app from quitting when all windows are closed
         NSApp.setActivationPolicy(.accessory)
         
         setupStatusItem()
         setupPopover()
         observeUsage()
         
-        // Restore desktop widget if previously visible
         if UserDefaults.standard.bool(forKey: "ClaudeWidgetVisible") {
             DesktopWidgetController.shared.show()
         }
@@ -25,9 +23,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Claude Usage")
+            button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "AI Limit Tracker")
             button.imagePosition = .imageLeading
-            button.title = " Claude"
+            button.title = " AI Limits"
             button.target = self
             button.action = #selector(statusItemClicked)
         }
@@ -37,7 +35,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupPopover() {
         let p = NSPopover()
         p.behavior = .transient
-        p.contentSize = NSSize(width: 320, height: 380)
+        p.contentSize = NSSize(width: 340, height: 440)
         
         let contentView = MenuBarView(
             service: UsageService.shared,
@@ -73,13 +71,19 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func observeUsage() {
         let service = UsageService.shared
         
-        // Combine updates from usage and countdown
-        Publishers.CombineLatest(service.$usage, service.$fiveHourCountdown)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _, _ in
-                self?.updateStatusItemTitle()
-            }
-            .store(in: &cancellables)
+        // Listen to updates from any provider or mode change
+        Publishers.Merge5(
+            service.$usage.map { _ in () },
+            service.$antigravityQuota.map { _ in () },
+            service.$chatGPTUsage.map { _ in () },
+            service.$menuBarMode.map { _ in () },
+            service.$fiveHourCountdown.map { _ in () }
+        )
+        .receive(on: RunLoop.main)
+        .sink { [weak self] _ in
+            self?.updateStatusItemTitle()
+        }
+        .store(in: &cancellables)
     }
     
     private func updateStatusItemTitle() {
@@ -89,28 +93,23 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let titleText = service.menuBarDisplayString
         let attrString = NSMutableAttributedString(string: " \(titleText)")
         
-        // Set font
-        let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         attrString.addAttribute(.font, value: font, range: NSRange(location: 0, length: attrString.length))
         
         button.attributedTitle = attrString
         
-        // Color-tinted icon according to status
-        let symbolName: String
+        // Color tint icon according to overall status
         let tintColor: NSColor
-        let pct = service.fiveHourPercent
-        if pct >= 85 {
-            symbolName = "exclamationmark.circle.fill"
+        let maxPct = max(service.fiveHourPercent, max(service.agyGemini5hUsed, service.chatGPT5hUsed))
+        if maxPct >= 85 {
             tintColor = .systemRed
-        } else if pct >= 60 {
-            symbolName = "sparkles"
+        } else if maxPct >= 60 {
             tintColor = .systemOrange
         } else {
-            symbolName = "sparkles"
             tintColor = .controlAccentColor
         }
         
-        if let img = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Claude Usage") {
+        if let img = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "AI Usage") {
             let config = NSImage.SymbolConfiguration(paletteColors: [tintColor])
             button.image = img.withSymbolConfiguration(config)
         }

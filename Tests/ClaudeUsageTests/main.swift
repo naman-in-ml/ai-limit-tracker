@@ -22,7 +22,7 @@ func assertTrue(_ condition: Bool, _ message: String = "", line: Int = #line) {
     }
 }
 
-print("🧪 Starting ClaudeUsage Test Suite...")
+print("🧪 Starting Multi-Provider AI Limit Tracker Test Suite...")
 
 // 1. Date Parsing
 do {
@@ -53,44 +53,23 @@ do {
     assertEqual(DateParsing.countdownString(from: past, now: now), "Resets soon")
 }
 
-// 3. UsageResponse Decoding
+// 3. Claude UsageResponse Decoding
 do {
     let json = """
     {
       "five_hour": {
         "utilization": 44.0,
-        "resets_at": "2026-11-09T11:30:00.326547+00:00",
-        "limit_dollars": null,
-        "used_dollars": null,
-        "remaining_dollars": null,
-        "locked_reason": null
+        "resets_at": "2026-11-09T11:30:00.326547+00:00"
       },
       "seven_day": {
         "utilization": 10.0,
-        "resets_at": "2026-11-11T06:00:00.326567+00:00",
-        "limit_dollars": null,
-        "used_dollars": null,
-        "remaining_dollars": null,
-        "locked_reason": null
+        "resets_at": "2026-11-11T06:00:00.326567+00:00"
       },
       "seven_day_breakdown": {
-        "as_of": "2026-11-09T07:52:43.406271+00:00",
-        "window_started_at": "2026-11-04T06:00:00.326567+00:00",
         "rows": [
           { "key": "claude_code", "display_name": "Claude Code", "percent": 99.0 },
-          { "key": "chat", "display_name": "Chats", "percent": 0.0 },
-          { "key": "cowork", "display_name": "Cowork", "percent": 1.0 }
+          { "key": "chat", "display_name": "Chats", "percent": 0.0 }
         ]
-      },
-      "spend": {
-        "used": {
-          "amount_minor": 350.0,
-          "currency": "USD",
-          "exponent": 2
-        },
-        "limit": 50.0,
-        "percent": 7.0,
-        "enabled": true
       }
     }
     """
@@ -101,52 +80,113 @@ do {
     assertEqual(response.fiveHour?.utilization, 44.0)
     assertTrue(response.fiveHour?.resetDate != nil, "Reset date should be non-nil")
     assertEqual(response.sevenDay?.utilization, 10.0)
-    
-    assertEqual(response.sevenDayBreakdown?.rows?.count, 3)
-    assertEqual(response.sevenDayBreakdown?.rows?.first?.displayName, "Claude Code")
-    assertEqual(response.sevenDayBreakdown?.rows?.first?.percent, 99.0)
-    
-    assertEqual(response.spend?.used?.formatted, "$3.50")
+    assertEqual(response.sevenDayBreakdown?.rows?.count, 2)
 }
 
-// 4. Config File Decoding
+// 4. Antigravity Quota Cache Decoding
 do {
     let json = """
     {
-      "oauthAccount": {
-        "emailAddress": "founder@example.com",
-        "seatTier": "pro",
-        "organizationName": "Acme Inc"
-      },
-      "cachedUsageUtilization": {
-        "fetchedAtMs": 1794127428483,
-        "utilization": {
-          "five_hour": {
-            "utilization": 25.0,
-            "resets_at": "2026-11-09T15:00:00Z"
-          }
+      "command": {
+        "name": "usage",
+        "data": {
+          "groups": [
+            {
+              "name": "Gemini Models",
+              "buckets": [
+                {
+                  "id": "gemini-weekly",
+                  "name": "Weekly Limit Remaining",
+                  "window": "weekly",
+                  "remaining_fraction": 0.92,
+                  "reset_time": "2026-11-14T04:12:05Z"
+                },
+                {
+                  "id": "gemini-5h",
+                  "name": "Five Hour Limit Remaining",
+                  "window": "5h",
+                  "remaining_fraction": 0.93,
+                  "reset_time": "2026-11-08T14:13:46Z"
+                }
+              ]
+            },
+            {
+              "name": "Claude and GPT models",
+              "buckets": [
+                {
+                  "id": "3p-5h",
+                  "name": "Five Hour Limit Remaining",
+                  "window": "5h",
+                  "remaining_fraction": 1.0,
+                  "reset_time": "2026-11-08T14:16:42Z"
+                }
+              ]
+            }
+          ]
         }
       }
     }
     """
     
     let data = json.data(using: .utf8)!
-    let config = try JSONDecoder().decode(ClaudeConfigFile.self, from: data)
+    let quota = try JSONDecoder().decode(AntigravityQuotaCache.self, from: data)
     
-    assertEqual(config.oauthAccount?.emailAddress, "founder@example.com")
-    assertEqual(config.oauthAccount?.seatTier, "pro")
-    assertEqual(config.cachedUsageUtilization?.utilization?.fiveHour?.utilization, 25.0)
+    let groups = quota.command?.data?.groups
+    assertEqual(groups?.count, 2)
+    
+    let geminiGroup = groups?.first(where: { $0.name == "Gemini Models" })
+    let gemini5h = geminiGroup?.buckets?.first(where: { $0.window == "5h" })
+    
+    XCTAssertApproximatelyEqual: do {
+        assertEqual(gemini5h?.remainingPercent, 93.0)
+        assertEqual(gemini5h?.usedPercent, 7.0)
+        assertTrue(gemini5h?.resetDate != nil, "Gemini reset date should be parsed")
+    }
+    
+    let threePGroup = groups?.first(where: { $0.name == "Claude and GPT models" })
+    let threeP5h = threePGroup?.buckets?.first(where: { $0.window == "5h" })
+    assertEqual(threeP5h?.remainingPercent, 100.0)
+    assertEqual(threeP5h?.usedPercent, 0.0)
 }
 
-// 5. Keychain & Live Config Smoke Check
+// 5. ChatGPT / Codex Usage Decoding
 do {
-    let home = FileManager.default.homeDirectoryForCurrentUser
-    let configURL = home.appendingPathComponent(".claude.json")
-    if FileManager.default.fileExists(atPath: configURL.path) {
-        let data = try Data(contentsOf: configURL)
-        let config = try JSONDecoder().decode(ClaudeConfigFile.self, from: data)
-        assertTrue(config.oauthAccount?.emailAddress != nil, "Live ~/.claude.json contains user email")
+    let json = """
+    {
+      "email": "naman.in.ml@gmail.com",
+      "plan_type": "plus",
+      "rate_limit": {
+        "allowed": true,
+        "limit_reached": false,
+        "primary_window": {
+          "used_percent": 8.0,
+          "limit_window_seconds": 18000,
+          "reset_after_seconds": 7200,
+          "reset_at": 1794230265
+        },
+        "secondary_window": {
+          "used_percent": 42.0,
+          "limit_window_seconds": 604800,
+          "reset_after_seconds": 234000,
+          "reset_at": 1794457947
+        }
+      },
+      "rate_limit_reset_credits": {
+        "available_count": 2,
+        "applicable_available_count": 0
+      }
     }
+    """
+    
+    let data = json.data(using: .utf8)!
+    let usage = try JSONDecoder().decode(ChatGPTUsageResponse.self, from: data)
+    
+    assertEqual(usage.email, "naman.in.ml@gmail.com")
+    assertEqual(usage.planType, "plus")
+    assertEqual(usage.rateLimit?.primaryWindow?.usedPercent, 8.0)
+    assertEqual(usage.rateLimit?.secondaryWindow?.usedPercent, 42.0)
+    assertTrue(usage.rateLimit?.primaryWindow?.resetDate != nil, "ChatGPT reset date should be computed")
+    assertEqual(usage.resetCredits?.availableCount, 2)
 }
 
 print("───────────────────────────────────────")

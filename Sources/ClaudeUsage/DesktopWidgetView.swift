@@ -1,5 +1,5 @@
-import ClaudeUsageCore
 import SwiftUI
+import ClaudeUsageCore
 
 public struct DesktopWidgetView: View {
     @ObservedObject var service: UsageService
@@ -20,18 +20,18 @@ public struct DesktopWidgetView: View {
     }
     
     public var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             // Header
             HStack(alignment: .center, spacing: 6) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(Color(nsColor: .controlAccentColor))
                 
-                Text("Claude")
-                    .font(.system(size: 13, weight: .bold))
+                Text("AI Usage Limits")
+                    .font(.system(size: 12, weight: .bold))
                 
                 Circle()
-                    .fill(service.statusColor)
+                    .fill(service.overallStatusColor)
                     .frame(width: 7, height: 7)
                 
                 Spacer()
@@ -61,50 +61,68 @@ public struct DesktopWidgetView: View {
                 .help("Close Widget")
             }
             
-            // Dual Circular Progress Gauges
-            HStack(spacing: 20) {
-                // 5-Hour Session Ring
+            // Triple Circular Gauges: Claude, Antigravity, GPT
+            HStack(spacing: 14) {
+                // Claude
                 CircularGauge(
                     percent: service.fiveHourPercent,
-                    title: "5h Session",
-                    countdown: service.fiveHourCountdown.isEmpty ? "Ready" : "↻ \(service.fiveHourCountdown)",
-                    color: colorForPercent(service.fiveHourPercent)
+                    title: "Claude",
+                    tag: "5h",
+                    countdown: service.fiveHourCountdown.isEmpty ? "Ready" : "↻\(service.fiveHourCountdown)",
+                    color: service.claudeStatusColor
                 )
                 
-                // 7-Day Weekly Ring
+                // Antigravity (Gemini)
                 CircularGauge(
-                    percent: service.sevenDayPercent,
-                    title: "7d Weekly",
-                    countdown: service.sevenDayCountdown.isEmpty ? "Ready" : "↻ \(service.sevenDayCountdown)",
-                    color: colorForPercent(service.sevenDayPercent)
+                    percent: service.agyGemini5hUsed,
+                    title: "Antigravity",
+                    tag: "5h",
+                    countdown: service.agyGemini5hCountdown.isEmpty ? "Ready" : "↻\(service.agyGemini5hCountdown)",
+                    color: service.agyStatusColor
+                )
+                
+                // ChatGPT / GPT
+                CircularGauge(
+                    percent: service.chatGPT5hUsed,
+                    title: "GPT",
+                    tag: "5h",
+                    countdown: service.chatGPT5hCountdown.isEmpty ? "Ready" : "↻\(service.chatGPT5hCountdown)",
+                    color: service.chatGPTStatusColor
                 )
             }
             .padding(.vertical, 2)
             
-            // Footer breakdown
-            if let rows = service.usage?.sevenDayBreakdown?.rows, !rows.isEmpty {
-                HStack(spacing: 10) {
-                    ForEach(rows) { row in
-                        if row.percent > 0 {
-                            Text("\(row.displayName): \(Int(row.percent))%")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    Spacer()
-                }
-            } else if let email = service.accountInfo?.emailAddress {
-                HStack {
-                    Text(email)
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                    Spacer()
-                }
+            // Footer Weekly Summary
+            HStack(spacing: 6) {
+                Text("Weekly:")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.secondary)
+                
+                Text("C: \(Int(service.sevenDayPercent))%")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                
+                Text("•")
+                    .font(.system(size: 8))
+                    .foregroundColor(.secondary.opacity(0.5))
+                
+                Text("AGY: \(Int(service.agyGeminiWeeklyUsed))%")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                
+                Text("•")
+                    .font(.system(size: 8))
+                    .foregroundColor(.secondary.opacity(0.5))
+                
+                Text("GPT: \(Int(service.chatGPTWeeklyUsed))%")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                
+                Spacer()
             }
         }
         .padding(14)
-        .frame(width: 280, height: 155)
+        .frame(width: 320, height: 160)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(nsColor: .windowBackgroundColor).opacity(0.75))
@@ -116,18 +134,8 @@ public struct DesktopWidgetView: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(Color.white.opacity(0.12), lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.2), radius: 15, x: 0, y: 8)
+                .shadow(color: Color.black.opacity(0.25), radius: 15, x: 0, y: 8)
         )
-    }
-    
-    private func colorForPercent(_ pct: Double) -> Color {
-        if pct >= 85 {
-            return .red
-        } else if pct >= 60 {
-            return .orange
-        } else {
-            return .green
-        }
     }
 }
 
@@ -135,36 +143,38 @@ public struct DesktopWidgetView: View {
 struct CircularGauge: View {
     var percent: Double
     var title: String
+    var tag: String
     var countdown: String
     var color: Color
     
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 3) {
             ZStack {
                 // Background Track
                 Circle()
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.25), lineWidth: 6)
-                    .frame(width: 58, height: 58)
+                    .stroke(Color(nsColor: .separatorColor).opacity(0.25), lineWidth: 5)
+                    .frame(width: 52, height: 52)
                 
                 // Progress Arc
                 Circle()
                     .trim(from: 0.0, to: CGFloat(min(max(percent / 100.0, 0.01), 1.0)))
-                    .stroke(color, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                    .frame(width: 58, height: 58)
+                    .stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .frame(width: 52, height: 52)
                     .rotationEffect(.degrees(-90))
                     .animation(.easeInOut(duration: 0.4), value: percent)
                 
                 // Center Percentage
                 Text("\(Int(percent))%")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
             }
             
             Text(title)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.primary)
+                .lineLimit(1)
             
             Text(countdown)
-                .font(.system(size: 9))
+                .font(.system(size: 8))
                 .foregroundColor(.secondary)
                 .lineLimit(1)
         }

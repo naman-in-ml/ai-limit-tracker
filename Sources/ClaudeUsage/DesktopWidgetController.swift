@@ -1,6 +1,6 @@
-import ClaudeUsageCore
 import AppKit
 import SwiftUI
+import ClaudeUsageCore
 
 public final class DesktopWidgetController: NSObject {
     public static let shared = DesktopWidgetController()
@@ -51,7 +51,7 @@ public final class DesktopWidgetController: NSObject {
     
     private func setupWindow() {
         let panel = NSPanel(
-            contentRect: NSRect(x: 100, y: 100, width: 280, height: 160),
+            contentRect: NSRect(x: 100, y: 100, width: 320, height: 160),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -68,11 +68,11 @@ public final class DesktopWidgetController: NSObject {
         applyWindowLevel()
         updateContent()
         
-        // If no saved position, position at top-right of main screen
+        // Default position: top-right corner of screen
         if panel.frame.origin.x == 100 && panel.frame.origin.y == 100,
            let screen = NSScreen.main {
             let screenRect = screen.visibleFrame
-            let x = screenRect.maxX - 310
+            let x = screenRect.maxX - 340
             let y = screenRect.maxY - 190
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         }
@@ -81,10 +81,8 @@ public final class DesktopWidgetController: NSObject {
     private func applyWindowLevel() {
         guard let window = window else { return }
         if isPinnedToDesktop {
-            // Pin just above the desktop background (wallpaper level)
             window.level = .init(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) + 1)
         } else {
-            // Float above standard windows
             window.level = .floating
         }
     }
