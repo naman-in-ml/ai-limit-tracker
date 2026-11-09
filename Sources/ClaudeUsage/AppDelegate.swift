@@ -22,6 +22,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.isVisible = true
+        item.autosaveName = "ClaudeUsageStatusItem"
+        item.behavior = []
         if let button = item.button {
             button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "AI Limit Tracker")
             button.imagePosition = .imageLeading

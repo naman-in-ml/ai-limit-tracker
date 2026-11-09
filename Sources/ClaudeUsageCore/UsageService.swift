@@ -39,6 +39,13 @@ public final class UsageService: ObservableObject {
     
     // UI State
     @Published public var selectedTab: String = "All"
+    @Published public var isLaunchAtLoginEnabled: Bool = LaunchAtLoginManager.shared.isEnabled
+    
+    public func toggleLaunchAtLogin() {
+        let newState = !isLaunchAtLoginEnabled
+        LaunchAtLoginManager.shared.setEnabled(newState)
+        isLaunchAtLoginEnabled = newState
+    }
     
     // Common
     @Published public var lastUpdated: Date?

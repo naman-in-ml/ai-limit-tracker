@@ -189,6 +189,12 @@ do {
     assertEqual(usage.resetCredits?.availableCount, 2)
 }
 
+// 6. LaunchAtLoginManager Test
+do {
+    let manager = LaunchAtLoginManager.shared
+    assertTrue(manager != nil, "LaunchAtLoginManager singleton should exist")
+}
+
 print("───────────────────────────────────────")
 print("✅ Test Results: \(testsPassed) passed, \(testsFailed) failed.")
 

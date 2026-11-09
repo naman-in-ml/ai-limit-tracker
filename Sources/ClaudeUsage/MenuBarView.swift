@@ -371,6 +371,25 @@ public struct MenuBarView: View {
                 .buttonStyle(.plain)
             }
             
+            // Start at Login toggle
+            HStack {
+                Label("Start at Login", systemImage: "bolt.badge.clock")
+                    .font(.system(size: 11))
+                Spacer()
+                Button(action: {
+                    service.toggleLaunchAtLogin()
+                }) {
+                    Text(service.isLaunchAtLoginEnabled ? "Enabled" : "Disabled")
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(service.isLaunchAtLoginEnabled ? Color(nsColor: .controlAccentColor) : Color(nsColor: .controlBackgroundColor))
+                        .foregroundColor(service.isLaunchAtLoginEnabled ? .white : .primary)
+                        .cornerRadius(5)
+                }
+                .buttonStyle(.plain)
+            }
+            
             HStack {
                 if let updated = service.lastUpdated {
                     Text("Updated " + timeAgo(from: updated))
