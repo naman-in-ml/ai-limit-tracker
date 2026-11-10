@@ -301,10 +301,18 @@ public final class UsageService: ObservableObject {
         }
         
         if needsRefresh {
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            let candidatePaths = [
+                "\(home)/.local/bin/agy",
+                "/opt/homebrew/bin/agy",
+                "/usr/local/bin/agy"
+            ]
+            let agyBin = candidatePaths.first(where: { fm.isExecutableFile(atPath: $0) }) ?? "agy"
+            
             // Run background fetch via agy CLI
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-            process.arguments = ["-c", "/Users/lucky/.local/bin/agy -p \"/quota\" --output-format json > /tmp/agy_quota_cache.json.tmp 2>/dev/null && mv /tmp/agy_quota_cache.json.tmp /tmp/agy_quota_cache.json"]
+            process.arguments = ["-c", "\(agyBin) -p \"/quota\" --output-format json > /tmp/agy_quota_cache.json.tmp 2>/dev/null && mv /tmp/agy_quota_cache.json.tmp /tmp/agy_quota_cache.json"]
             try? process.run()
             process.waitUntilExit()
         }
